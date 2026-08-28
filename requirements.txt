@@ -3,3 +3,5 @@ uvicorn
 duckdb
 pandas
 pyarrow
+requests
+
