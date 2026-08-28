@@ -109,7 +109,6 @@ def fetch_data(Number: str = Query(None)):
     
     last_digit = Number[-1]
     
-    # Ensuring exact URL encoding for files with spaces using standard HTTP safe quote characters
     raw_primary_url = f"https://huggingface.co/datasets/CutehackX/hitek-data-bucket/resolve/main/final master shard {last_digit}.parquet"
     raw_alt_url = f"https://huggingface.co/datasets/CutehackX/hitek-data-bucket/resolve/main/alt master shard {last_digit}.parquet"
     
@@ -120,8 +119,7 @@ def fetch_data(Number: str = Query(None)):
         con = duckdb.connect(database=':memory:', read_only=False)
         con.execute("INSTALL httpfs;")
         con.execute("LOAD httpfs;")
-        # Set user agent to avoid Hugging Face blocking requests without a browser header
-        con.execute("SET http_user_agent='Mozilla/5.0';")
+        con.execute("SET custom_user_agent='Mozilla/5.0';")
 
         query = f"""
             SELECT *, 'Main' AS _record_type FROM read_parquet('{primary_url}') WHERE mobile = '{Number}'
