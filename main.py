@@ -4,6 +4,9 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from datetime import datetime
 import duckdb
 import urllib.parse
+import requests
+import tempfile
+import os
 
 app = FastAPI()
 
@@ -109,22 +112,55 @@ def fetch_data(Number: str = Query(None)):
     
     last_digit = Number[-1]
     
+    # Direct URLs with proper space encoding for requests download fallback
     raw_primary_url = f"https://huggingface.co/datasets/CutehackX/hitek-data-bucket/resolve/main/final master shard {last_digit}.parquet"
     raw_alt_url = f"https://huggingface.co/datasets/CutehackX/hitek-data-bucket/resolve/main/alt master shard {last_digit}.parquet"
     
     primary_url = urllib.parse.quote(raw_primary_url, safe=":/._-")
     alt_url = urllib.parse.quote(raw_alt_url, safe=":/._-")
     
+    primary_tmp_path = None
+    alt_tmp_path = None
+    
     try:
-        con = duckdb.connect(database=':memory:', read_only=False, config={"custom_user_agent": "Mozilla/5.0"})
-        con.execute("INSTALL httpfs;")
-        con.execute("LOAD httpfs;")
+        headers = {"User-Agent": "Mozilla/5.0"}
+        
+        # Download primary parquet file locally via requests to bypass direct HTTP duckdb space issue
+        res_primary = requests.get(primary_url, headers=headers, stream=True)
+        if res_primary.status_code == 200:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".parquet") as tmp1:
+                for chunk in res_primary.iter_content(chunk_size=8192):
+                    tmp1.write(chunk)
+                primary_tmp_path = tmp1.name
 
-        query = f"""
-            SELECT *, 'Main' AS _record_type FROM read_parquet('{primary_url}') WHERE mobile = '{Number}'
-            UNION ALL
-            SELECT *, 'Alt' AS _record_type FROM read_parquet('{alt_url}') WHERE alt = '{Number}'
-        """
+        # Download alt parquet file locally via requests
+        res_alt = requests.get(alt_url, headers=headers, stream=True)
+        if res_alt.status_code == 200:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".parquet") as tmp2:
+                for chunk in res_alt.iter_content(chunk_size=8192):
+                    tmp2.write(chunk)
+                alt_tmp_path = tmp2.name
+
+        con = duckdb.connect(database=':memory:', read_only=False)
+        
+        query_parts = []
+        if primary_tmp_path and os.path.exists(primary_tmp_path):
+            query_parts.append(f"SELECT *, 'Main' AS _record_type FROM read_parquet('{primary_tmp_path}') WHERE mobile = '{Number}'")
+        
+        if alt_tmp_path and os.path.exists(alt_tmp_path):
+            query_parts.append(f"SELECT *, 'Alt' AS _record_type FROM read_parquet('{alt_tmp_path}') WHERE alt = '{Number}'")
+            
+        if not query_parts:
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "status": "error",
+                    "message": "Failed to download parquet shards from cloud repository.",
+                    "Developer": "@coderpetro"
+                }
+            )
+            
+        query = " UNION ALL ".join(query_parts)
         
         raw_results = con.execute(query).df().to_dict(orient="records")
         con.close()
@@ -138,6 +174,12 @@ def fetch_data(Number: str = Query(None)):
                 main_records.append(row)
             else:
                 alt_records.append(row)
+                
+        # Clean up temp files
+        if primary_tmp_path and os.path.exists(primary_tmp_path):
+            os.remove(primary_tmp_path)
+        if alt_tmp_path and os.path.exists(alt_tmp_path):
+            os.remove(alt_tmp_path)
         
         if not main_records and not alt_records:
             return JSONResponse(
@@ -165,6 +207,11 @@ def fetch_data(Number: str = Query(None)):
         }
         
     except Exception as e:
+        if primary_tmp_path and os.path.exists(primary_tmp_path):
+            os.remove(primary_tmp_path)
+        if alt_tmp_path and os.path.exists(alt_tmp_path):
+            os.remove(alt_tmp_path)
+            
         return JSONResponse(
             status_code=500,
             content={
