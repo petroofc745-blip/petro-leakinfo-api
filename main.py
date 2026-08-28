@@ -7,8 +7,7 @@ import urllib.parse
 
 app = FastAPI()
 
-# Set your service expiration date here (Format: YYYY-MM-DD)
-EXPIRY_DATE = "2026-09-29"
+EXPIRY_DATE = "2026-09-28"
 
 LANDING_PAGE_HTML = """
 <!DOCTYPE html>
@@ -49,45 +48,6 @@ LANDING_PAGE_HTML = """
             <span class="blinking" style="color: #00ffcc;">●</span> HTTP 200 OK - LISTENING FOR QUERIES
         </div>
     </div>
-
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script>
-        const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
-        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-        
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        document.getElementById('canvas-container').appendChild(renderer.domElement);
-
-        const geometry = new THREE.BufferGeometry();
-        const vertices = [];
-        for (let i = 0; i < 8000; i++) {
-            vertices.push(THREE.MathUtils.randFloatSpread(3000));
-            vertices.push(THREE.MathUtils.randFloatSpread(3000));
-            vertices.push(THREE.MathUtils.randFloatSpread(3000));
-        }
-        
-        geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-        const material = new THREE.PointsMaterial({ color: 0x00ffcc, size: 2.5, transparent: true, opacity: 0.8 });
-        const points = new THREE.Points(geometry, material);
-        scene.add(points);
-
-        camera.position.z = 1200;
-
-        function animate() {
-            requestAnimationFrame(animate);
-            points.rotation.x += 0.0005;
-            points.rotation.y += 0.001;
-            renderer.render(scene, camera);
-        }
-        animate();
-
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        });
-    </script>
 </body>
 </html>
 """
@@ -149,17 +109,19 @@ def fetch_data(Number: str = Query(None)):
     
     last_digit = Number[-1]
     
-    # Properly encode the URLs containing spaces so DuckDB can fetch them
+    # Ensuring exact URL encoding for files with spaces using standard HTTP safe quote characters
     raw_primary_url = f"https://huggingface.co/datasets/CutehackX/hitek-data-bucket/resolve/main/final master shard {last_digit}.parquet"
     raw_alt_url = f"https://huggingface.co/datasets/CutehackX/hitek-data-bucket/resolve/main/alt master shard {last_digit}.parquet"
     
-    primary_url = urllib.parse.quote(raw_primary_url, safe=":/._")
-    alt_url = urllib.parse.quote(raw_alt_url, safe=":/._")
+    primary_url = urllib.parse.quote(raw_primary_url, safe=":/._-")
+    alt_url = urllib.parse.quote(raw_alt_url, safe=":/._-")
     
     try:
         con = duckdb.connect(database=':memory:', read_only=False)
         con.execute("INSTALL httpfs;")
         con.execute("LOAD httpfs;")
+        # Set user agent to avoid Hugging Face blocking requests without a browser header
+        con.execute("SET http_user_agent='Mozilla/5.0';")
 
         query = f"""
             SELECT *, 'Main' AS _record_type FROM read_parquet('{primary_url}') WHERE mobile = '{Number}'
