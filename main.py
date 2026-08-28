@@ -116,10 +116,9 @@ def fetch_data(Number: str = Query(None)):
     alt_url = urllib.parse.quote(raw_alt_url, safe=":/._-")
     
     try:
-        con = duckdb.connect(database=':memory:', read_only=False)
+        con = duckdb.connect(database=':memory:', read_only=False, config={"custom_user_agent": "Mozilla/5.0"})
         con.execute("INSTALL httpfs;")
         con.execute("LOAD httpfs;")
-        con.execute("SET custom_user_agent='Mozilla/5.0';")
 
         query = f"""
             SELECT *, 'Main' AS _record_type FROM read_parquet('{primary_url}') WHERE mobile = '{Number}'
