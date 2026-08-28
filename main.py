@@ -3,6 +3,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from datetime import datetime
 import duckdb
+import urllib.parse
 
 app = FastAPI()
 
@@ -147,8 +148,13 @@ def fetch_data(Number: str = Query(None)):
         )
     
     last_digit = Number[-1]
-    primary_url = f"https://huggingface.co/datasets/CutehackX/hitek-data-bucket/resolve/main/final_master_shard_{last_digit}.parquet".replace(" ", "%20")
-    alt_url = f"https://huggingface.co/datasets/CutehackX/hitek-data-bucket/resolve/main/alt_master_shard_{last_digit}.parquet".replace(" ", "%20")
+    
+    # Properly encode the URLs containing spaces so DuckDB can fetch them
+    raw_primary_url = f"https://huggingface.co/datasets/CutehackX/hitek-data-bucket/resolve/main/final master shard {last_digit}.parquet"
+    raw_alt_url = f"https://huggingface.co/datasets/CutehackX/hitek-data-bucket/resolve/main/alt master shard {last_digit}.parquet"
+    
+    primary_url = urllib.parse.quote(raw_primary_url, safe=":/._")
+    alt_url = urllib.parse.quote(raw_alt_url, safe=":/._")
     
     try:
         con = duckdb.connect(database=':memory:', read_only=False)
