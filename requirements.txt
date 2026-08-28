@@ -4,4 +4,5 @@ duckdb
 pandas
 pyarrow
 requests
+huggingface_hub
 
