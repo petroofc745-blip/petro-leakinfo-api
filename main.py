@@ -7,7 +7,7 @@ import duckdb
 app = FastAPI()
 
 # Set your service expiration date here (Format: YYYY-MM-DD)
-EXPIRY_DATE = "2026-09-28"
+EXPIRY_DATE = "2026-09-29"
 
 LANDING_PAGE_HTML = """
 <!DOCTYPE html>
@@ -147,8 +147,8 @@ def fetch_data(Number: str = Query(None)):
         )
     
     last_digit = Number[-1]
-    primary_url = f"https://huggingface.co/datasets/CutehackX/hitek-data-bucket/resolve/main/final_master_shard_{last_digit}.parquet"
-    alt_url = f"https://huggingface.co/datasets/CutehackX/hitek-data-bucket/resolve/main/alt_master_shard_{last_digit}.parquet"
+    primary_url = f"https://huggingface.co/datasets/CutehackX/hitek-data-bucket/resolve/main/final_master_shard_{last_digit}.parquet".replace(" ", "%20")
+    alt_url = f"https://huggingface.co/datasets/CutehackX/hitek-data-bucket/resolve/main/alt_master_shard_{last_digit}.parquet".replace(" ", "%20")
     
     try:
         con = duckdb.connect(database=':memory:', read_only=False)
